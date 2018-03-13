@@ -35,16 +35,17 @@ function restrict(req, res, next) {
     next();
   } else {
     req.session.error = 'Access denied!';
-    res.redirect('/login');
+    res.status(403)
+    res.redirect('/');
   }
 }
 
-app.get('/',
-function(req, res) {
+app.get('/', function(req, res) {
   res.render('login');
 });
 
 app.get('/create', restrict, function(req, res) {
+  console.log('here in create')
   res.render('index');
 });
 
@@ -102,12 +103,18 @@ app.post('/login', function(req, res) {
       var hash = bcrypt.hashSync(password, salt);
 
       if (user.attributes.password === hash) {
-        res.send(200, 'Logged in')
+        req.session.regenerate(function(){
+          req.session.user = username;
+          res.redirect('/create');
+        });
+
       } else {
-        res.send(400, 'Incorrect credentials')
+        res.send(403, 'Incorrect credentials')
       }
+    } else {
+      res.send(403, 'Incorrect credentials')
     }
-    res.send(400, 'Incorrect credentials')
+
     //console.log('Here is the ', user.attributes.salt);
   })
 
@@ -153,6 +160,12 @@ app.post('/signup', function(req, res) {
 
 });
 
+app.get('/signout', function(req, res) {
+  req.session.destroy(function(){
+      res.redirect('/');
+  });
+})
+
 /************************************************************/
 // Handle the wildcard route last - if all other routes fail
 // assume the route is a short code and try and handle it here.
@@ -177,5 +190,7 @@ app.get('/*', function(req, res) {
     }
   });
 });
+
+
 
 module.exports = app;
