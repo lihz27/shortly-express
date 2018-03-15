@@ -4,6 +4,8 @@ var partials = require('express-partials');
 var bodyParser = require('body-parser');
 var session = require('express-session')
 var bcrypt = require('bcrypt');
+var passport = require('passport')
+var GitHubStrategy = require('passport-github2').Strategy;
 
 
 
@@ -44,18 +46,19 @@ app.get('/', function(req, res) {
   res.render('login');
 });
 
-app.get('/create', restrict, function(req, res) {
+app.get('/create', function(req, res) {
   console.log('here in create')
+  // console.log(req)
   res.render('index');
 });
 
-app.get('/links', restrict, function(req, res) {
+app.get('/links', function(req, res) {
   Links.reset().fetch().then(function(links) {
     res.status(200).send(links.models);
   });
 });
 
-app.post('/links', restrict, function(req, res) {
+app.post('/links', function(req, res) {
   var uri = req.body.url;
 
   if (!util.isValidUrl(uri)) {
@@ -160,11 +163,17 @@ app.post('/signup', function(req, res) {
 
 });
 
-app.get('/signout', function(req, res) {
-  req.session.destroy(function(){
-      res.redirect('/');
-  });
-})
+// app.get('/signout', function(req, res) {
+//   req.session.destroy(function(){
+//       res.redirect('/');
+//   });
+// })
+
+
+app.get('/signout', function(req, res){
+  req.logout();
+  res.redirect('/');
+});
 
 /************************************************************/
 // Handle the wildcard route last - if all other routes fail
@@ -172,6 +181,43 @@ app.get('/signout', function(req, res) {
 // If the short-code doesn't exist, send the user to '/'
 /************************************************************/
 
+passport.use(new GitHubStrategy({
+    clientID: '8d8cf4873e622bb86bf1',
+    clientSecret: 'c9d6f72320746f806348ddd07edceeef622834db',
+    callbackURL: "http://127.0.0.1:4568/auth/github/callback"
+  },
+  function(accessToken, refreshToken, profile, done) {
+    // User.findOrCreate({ githubId: profile.id }, function (err, user) {
+    //   return done(err, user);
+    // });
+    console.log(profile, "profile<<<<<<<<")
+    new User({githubId: profile.id}).fetch().then(function(model){
+      if(!model){
+        new User({
+          username: login,
+          githubId: profile.id
+        })
+        .save()
+      }
+    })
+  }
+));
+
+
+app.get('/auth/github/callback',
+  passport.authorize('github', { failureRedirect: '/', scope: [ 'user:email' ] }),
+  function(req, res) {
+    console.log(req, 'request from callback<<<<<<<')
+    res.redirect('/create');
+  });
+
+
+app.get('/auth/github',
+  passport.authenticate('github', { scope: [ 'user:email' ] }));
+
+
+
+// handle all other requests
 app.get('/*', function(req, res) {
   new Link({ code: req.params[0] }).fetch().then(function(link) {
     if (!link) {
@@ -190,7 +236,5 @@ app.get('/*', function(req, res) {
     }
   });
 });
-
-
 
 module.exports = app;
